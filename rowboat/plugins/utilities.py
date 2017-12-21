@@ -27,7 +27,7 @@ from rowboat.models.user import User, Infraction
 from rowboat.models.message import Message, Reminder
 from rowboat.util.images import get_dominant_colors_user, get_dominant_colors_guild
 from rowboat.constants import (
-    STATUS_EMOJI, SNOOZE_EMOJI, GREEN_TICK_EMOJI, GREEN_TICK_EMOJI_ID,
+    STATUS_EMOJI, SNOOZE_EMOJI, GREEN_TICK_EMOJI, GREEN_TICK_EMOJI_ID, GREEN_TICK_EMOJI_NORMAL, RED_TICK_EMOJI_REACT,
     EMOJI_RE, USER_MENTION_RE, YEAR_IN_SEC, CDN_URL
 )
 
@@ -94,10 +94,16 @@ class UtilitiesPlugin(Plugin):
 
         event.msg.reply(str(random.randint(start, end)))
 
+    @Plugin.command('kitten', global_=True)
+    @Plugin.command('neko', global_=True)
+    @Plugin.command('kitty', global_=True)
+    @Plugin.command('kitkat', global_=True)
+    @Plugin.command('fatbitch', global_=True)
+    @Plugin.command('pussy', global_=True)
     @Plugin.command('cat', global_=True)
     def cat(self, event):
         # Sometimes random.cat gives us gifs (smh)
-        for _ in range(3):
+        for _ in range(5):
             try:
                 r = requests.get('http://random.cat/meow')
                 r.raise_for_status()
@@ -113,6 +119,27 @@ class UtilitiesPlugin(Plugin):
         r = requests.get(url)
         r.raise_for_status()
         event.msg.reply('', attachments=[('cat.jpg', r.content)])
+
+
+    @Plugin.command('dog', global_=True)
+    def dog(self, event):
+        # Sometimes random.cat gives us gifs (smh)
+        for _ in range(5):
+            try:
+                r = requests.get('http://random.dog/woof.json')
+                r.raise_for_status()
+            except:
+                continue
+
+            url = r.json()['url']
+            if not url.endswith('.JPG') and not url.endswith('.mp4') and not url.endswith('.gif'):
+                break
+        else:
+            return event.msg.reply('404 doggo not found :(')
+
+        r = requests.get(url)
+        r.raise_for_status()
+        event.msg.reply('', attachments=[('dog.jpg', r.content)])
 
     @Plugin.command('emoji', '<emoji:str>', global_=True)
     def emoji(self, event, emoji):
@@ -451,7 +478,7 @@ class UtilitiesPlugin(Plugin):
     @Plugin.command('remind', '<duration:str> <content:str...>', global_=True)
     def cmd_remind(self, event, duration, content):
         if Reminder.count_for_user(event.author.id) > 30:
-            return event.msg.reply(':warning: you an only have 15 reminders going at once!')
+            return event.msg.reply(':warning: you can only have 15 reminders going at once!')
 
         remind_at = parse_duration(duration)
         if remind_at > (datetime.utcnow() + timedelta(seconds=5 * YEAR_IN_SEC)):

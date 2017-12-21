@@ -2,6 +2,8 @@ import re
 import json
 import urlparse
 
+from urllib import unquote
+
 from holster.enum import Enum
 from disco.types.base import cached_property
 from disco.util.sanitize import S
@@ -88,7 +90,7 @@ class Censorship(Exception):
 @Plugin.with_config(CensorConfig)
 class CensorPlugin(Plugin):
     def compute_relevant_configs(self, event, author):
-        if event.channel_id in event.config.channels:
+        if event.channel.id in event.config.channels:
             yield event.config.channels[event.channel.id]
 
         if event.config.levels:
@@ -190,7 +192,7 @@ class CensorPlugin(Plugin):
             })
 
     def filter_invites(self, event, config):
-        invites = INVITE_LINK_RE.findall(event.content)
+        invites = INVITE_LINK_RE.findall(unquote(event.content))
 
         for _, invite in invites:
             invite_info = self.get_invite_info(invite)
@@ -209,7 +211,7 @@ class CensorPlugin(Plugin):
 
             if need_whitelist and not whitelisted:
                 raise Censorship(CensorReason.INVITE, event, ctx={
-                    'hit': 'whietlist',
+                    'hit': 'whitelist',
                     'invite': invite,
                     'guild': invite_info,
                 })

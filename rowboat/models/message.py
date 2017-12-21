@@ -17,6 +17,12 @@ from rowboat.util import default_json
 from rowboat.models.user import User
 from rowboat.sql import BaseModel
 
+from yaml import load
+
+
+with open('config.yaml', 'r') as f:
+    config = load(f)
+
 EMOJI_RE = re.compile(r'<:.+:([0-9]+)>')
 
 
@@ -199,7 +205,7 @@ class MessageArchive(BaseModel):
     @property
     def url(self):
         # TODO: use web endpoint here
-        return 'https://dashboard.rowboat.party/api/archive/{}.txt'.format(self.archive_id)
+        return 'http://{}/archive/{}.txt'.format(config['web']['DOMAIN'], self.archive_id)
 
     def encode(self, fmt='txt'):
         from rowboat.models.user import User

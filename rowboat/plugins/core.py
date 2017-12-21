@@ -30,15 +30,25 @@ from rowboat.models.message import Command
 from rowboat.models.notification import Notification
 from rowboat.plugins.modlog import Actions
 from rowboat.constants import (
-    GREEN_TICK_EMOJI, RED_TICK_EMOJI, ROWBOAT_GUILD_ID, ROWBOAT_USER_ROLE_ID,
-    ROWBOAT_CONTROL_CHANNEL
+    GREEN_TICK_EMOJI, RED_TICK_EMOJI, ROWBOAT_GUILD_ID, ROWBOAT_USER_ROLE_ID, GREEN_TICK_EMOJI_NORMAL, RED_TICK_EMOJI_REACT,
+    ROWBOAT_CONTROL_CHANNEL, DISCORD_CLIENT_ID, DISCORD_AUTH_URL
 )
+
+from yaml import load
+
+
+with open('config.yaml', 'r') as f:
+    config = load(f)
 
 PY_CODE_BLOCK = u'```py\n{}\n```'
 
 BOT_INFO = '''
 Rowboat is a moderation and utilitarian bot built for large Discord servers.
-'''
+
+''' + 'Dashboard: http://{}'.format(config['web']['DOMAIN'])
+
+BOT_INFO = BOT_INFO + '''
+''' + 'Invite Url: (For whitelist, ask **777#7777**): {}?client_id={}&permissions=8&scope=bot'.format(DISCORD_AUTH_URL, DISCORD_CLIENT_ID)
 
 GUILDS_WAITING_SETUP_KEY = 'gws'
 
@@ -123,7 +133,19 @@ class CorePlugin(Plugin):
 
                     # Update guild access
                     self.update_rowboat_guild_access()
+                    
+					# Update bot nickname
 
+                    if config.nickname:
+                        def set_nickname():
+                            m = self.state.guilds.get(data['id']).members.select_one(id=self.state.me.id)
+                            if m and m.nick != config.nickname:
+                                try:
+                                    m.set_nickname(config.nickname)
+                                except APIException as e:
+                                    self.log.warning('Failed to set nickname for guild %s (%s)', event.guild, e.content)
+                        self.spawn_later(5, set_nickname)
+                    
                     # Finally, emit the event
                     self.emitter.emit('GUILD_CONFIG_UPDATE', self.guilds[data['id']], config)
                 except:
@@ -133,14 +155,15 @@ class CorePlugin(Plugin):
                 self.log.info('Restart requested, signaling parent')
                 os.kill(os.getppid(), signal.SIGUSR1)
             elif data['type'] == 'GUILD_DELETE' and data['id'] in self.guilds:
+                _guild = self.state.guilds.get(data['id'])
                 with self.send_control_message() as embed:
                     embed.color = 0xff6961
                     embed.title = u'Guild Force Deleted {}'.format(
-                        self.guilds[data['id']].name,
+                        _guild.name,
                     )
 
-                self.log.info(u'Leaving guild %s', self.guilds[data['id']].name)
-                self.guilds[data['id']].leave()
+                self.log.info(u'Leaving guild %s', _guild.name)
+                _guild.leave()
 
     def unload(self, ctx):
         ctx['guilds'] = self.guilds
@@ -148,7 +171,7 @@ class CorePlugin(Plugin):
         super(CorePlugin, self).unload(ctx)
 
     def update_rowboat_guild_access(self):
-        if ROWBOAT_GUILD_ID not in self.state.guilds or ENV != 'prod':
+        if ROWBOAT_GUILD_ID not in self.state.guilds:# or ENV != 'prod':
             return
 
         rb_guild = self.state.guilds.get(ROWBOAT_GUILD_ID)
@@ -425,10 +448,10 @@ class CorePlugin(Plugin):
             # Otherwise, default to requiring mentions
             commands = list(self.bot.get_commands_for_message(True, {}, '', event.message))
         else:
-            if ENV != 'prod':
-                if not event.message.content.startswith(ENV + '!'):
-                    return
-                event.message.content = event.message.content[len(ENV) + 1:]
+#            if ENV != 'prod':
+#                if not event.message.content.startswith(ENV + '!'):
+#                    return
+#                event.message.content = event.message.content[len(ENV) + 1:]
 
             # DM's just use the commands (no prefix/mention)
             commands = list(self.bot.get_commands_for_message(False, {}, '', event.message))
@@ -606,7 +629,7 @@ class CorePlugin(Plugin):
         else:
             event.msg.reply(PY_CODE_BLOCK.format(result))
 
-    @Plugin.command('sync-bans', group='control', level=-1)
+    @Plugin.command('sync-bans', group='control',level=-1)
     def control_sync_bans(self, event):
         guilds = list(Guild.select().where(
             Guild.enabled == 1
@@ -617,9 +640,9 @@ class CorePlugin(Plugin):
         for guild in guilds:
             guild.sync_bans(self.client.state.guilds.get(guild.guild_id))
 
-        msg.edit('<:{}> synced {} guilds'.format(GREEN_TICK_EMOJI, len(guilds)))
+        msg.edit('synced {} guilds'.format(len(guilds)))
 
-    @Plugin.command('reconnect', group='control', level=-1)
+    @Plugin.command('reconnect', group='control',level=-1)
     def control_reconnect(self, event):
         event.msg.reply('Ok, closing connection')
         self.client.gw.ws.close()
@@ -647,19 +670,20 @@ class CorePlugin(Plugin):
                 guild.name,
             ))
 
-        msg.edit(u'Ok, here is a temporary invite for you: {}'.format(
+        msg.edit(u'Ok, here is a temporary invite for you: discord.gg/{}'.format(
             invite.code,
         ))
 
-    @Plugin.command('wh', '<guild:snowflake>', group='guilds', level=-1)
+    @Plugin.command('wh', '<guild:snowflake>',group='guilds', level=-1)
     def guild_whitelist(self, event, guild):
         rdb.sadd(GUILDS_WAITING_SETUP_KEY, str(guild))
         event.msg.reply('Ok, guild %s is now in the whitelist' % guild)
 
-    @Plugin.command('unwh', '<guild:snowflake>', group='guilds', level=-1)
+    @Plugin.command('unwh', '<guild:snowflake>',group='guilds', level=-1)
     def guild_unwhitelist(self, event, guild):
         rdb.srem(GUILDS_WAITING_SETUP_KEY, str(guild))
         event.msg.reply('Ok, I\'ve made sure guild %s is no longer in the whitelist' % guild)
+        Guild.update(whitelist=[]).where(str(Guild.guild_id) == str(guild)).execute()
 
     @Plugin.command('disable', '<plugin:str>', group='plugins', level=-1)
     def plugin_disable(self, event, plugin):
